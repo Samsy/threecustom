@@ -11152,13 +11152,7 @@
 
 	function BufferGeometry() {
 
-		console.log('new buffer geoooo')
-
 		Object.defineProperty( this, 'id', { value: bufferGeometryId += 2 } );
-
-		console.log('new buffer geoooo', bufferGeometryId)
-		console.log('new buffer geoooo', bufferGeometryId)
-		console.log('new buffer geoooo', bufferGeometryId)
 
 		this.uuid = _Math.generateUUID();
 
@@ -23074,65 +23068,17 @@
 		
 		this.renderLIGHT = function (scene, camera, mesh, renderTarget, forceClear) { 
 
+			
 			_currentGeometryProgram.geometry = null;
 			_currentGeometryProgram.program = null;
 			_currentGeometryProgram.wireframe = false;
 			_currentMaterialId = - 1;
 			_currentCamera = null;
 
-			// update scene graph
-
-			if ( scene.autoUpdate === true ) scene.updateMatrixWorld();
-
-			// update camera matrices and frustum
-
-			if ( camera.parent === null ) camera.updateMatrixWorld();
-
-			if ( vr.enabled ) {
-
-				camera = vr.getCamera( camera );
-
-			}
-
-			//
-
 			currentRenderState = renderStates.get( scene, camera );
 			currentRenderState.init();
 
-			scene.onBeforeRender( _this, scene, camera, renderTarget );
-
-			_projScreenMatrix.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
-			_frustum.setFromMatrix( _projScreenMatrix );
-
-			_localClippingEnabled = this.localClippingEnabled;
-			_clippingEnabled = _clipping.init( this.clippingPlanes, _localClippingEnabled, camera );
-
-			currentRenderList = renderLists.get( scene, camera );
-			currentRenderList.init();
-
-			projectObject( scene, camera, _this.sortObjects );
-
-			if ( _this.sortObjects === true ) {
-
-				currentRenderList.sort();
-
-			}
-
-			//
-
-			if ( _clippingEnabled ) _clipping.beginShadows();
-
-			var shadowsArray = currentRenderState.state.shadowsArray;
-
-			shadowMap.render( shadowsArray, scene, camera );
-
-			currentRenderState.setupLights( camera );
-
-			if ( _clippingEnabled ) _clipping.endShadows();
-
-			//
-
-			if ( this.info.autoReset ) this.info.reset();
+			this.info.calls++;
 
 			if ( renderTarget === undefined ) {
 
@@ -23142,62 +23088,24 @@
 
 			this.setRenderTarget( renderTarget );
 
-			//
+			if ( this.autoClear || forceClear ) {
 
-			background.render( currentRenderList, scene, camera, forceClear );
-
-			// render scene
-
-			var opaqueObjects = currentRenderList.opaque;
-			var transparentObjects = currentRenderList.transparent;
-
-			if ( scene.overrideMaterial ) {
-
-				var overrideMaterial = scene.overrideMaterial;
-
-				if ( opaqueObjects.length ) renderObjects( opaqueObjects, scene, camera, overrideMaterial );
-				if ( transparentObjects.length ) renderObjects( transparentObjects, scene, camera, overrideMaterial );
-
-			} else {
-
-				// opaque pass (front-to-back order)
-
-				if ( opaqueObjects.length ) renderObjects( opaqueObjects, scene, camera );
-
-				// transparent pass (back-to-front order)
-
-				if ( transparentObjects.length ) renderObjects( transparentObjects, scene, camera );
+				this.clear( this.autoClearColor, this.autoClearDepth, this.autoClearStencil );
 
 			}
 
-			// Generate mipmap if we're using any kind of mipmap filtering
+			
+			var geometry = objects.update( mesh );
 
-			if ( renderTarget ) {
-
-				textures.updateRenderTargetMipmap( renderTarget );
-
-			}
-
-			// Ensure depth buffer writing is enabled so it can be cleared on next render
-
+			this.renderBufferDirectLIGHT( camera, null, mesh.geometry, mesh.material, mesh, null );
+			
 			state.buffers.depth.setTest( true );
 			state.buffers.depth.setMask( true );
 			state.buffers.color.setMask( true );
 
-			state.setPolygonOffset( false );
-
-			scene.onAfterRender( _this, scene, camera );
-
-			if ( vr.enabled ) {
-
-				vr.submitFrame();
-
-			}
-
-			// _gl.finish();
-
 			currentRenderList = null;
 			currentRenderState = null;
+
 		}
 
 		this.renderBufferDirect = function ( camera, fog, geometry, material, object, group ) {
