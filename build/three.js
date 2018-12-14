@@ -18910,16 +18910,17 @@
 			var currentDepthMask = null;
 			var currentDepthFunc = null;
 			var currentDepthClear = null;
+			var currentDepthTest  = null
 
 			return {
 
 				setTest: function ( depthTest ) {
 
-					if ( depthTest ) {
+					if ( depthTest  ) {
 
 						enable( gl.DEPTH_TEST );
 
-					} else {
+					} else  {
 
 						disable( gl.DEPTH_TEST );
 
@@ -23069,10 +23070,11 @@
 		this.renderLIGHT = function (scene, camera, mesh, renderTarget, forceClear) { 
 
 			
-			_currentGeometryProgram.geometry = null;
-			_currentGeometryProgram.program = null;
-			_currentGeometryProgram.wireframe = false;
-			_currentMaterialId = - 1;
+			// _currentGeometryProgram.geometry = null;
+			// _currentGeometryProgram.program = null;
+			// _currentGeometryProgram.wireframe = false;
+			// _currentMaterialId = - 1;
+			
 			_currentCamera = null;
 
 			currentRenderState = renderStates.get( scene, camera );
@@ -23093,7 +23095,6 @@
 				this.clear( this.autoClearColor, this.autoClearDepth, this.autoClearStencil );
 
 			}
-
 			
 			var geometry = objects.update( mesh );
 
@@ -23117,6 +23118,7 @@
 			var program = setProgram( camera, fog, material, object );
 
 			var updateBuffers = false;
+
 
 			if ( _currentGeometryProgram.geometry !== geometry.id ||
 				_currentGeometryProgram.program !== program.id ||

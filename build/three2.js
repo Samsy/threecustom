@@ -7546,6 +7546,7 @@
 
 		function createBuffer( attribute, bufferType ) {
 
+
 			var array = attribute.array;
 			var usage = attribute.dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW;
 
@@ -15563,6 +15564,7 @@
 			var frame = info.render.frame;
 
 			var geometry = object.geometry;
+
 			var buffergeometry = geometries.get( object, geometry );
 
 			// Update once per frame
@@ -17625,6 +17627,7 @@
 			if ( map === undefined ) {
 
 				map = {};
+
 				properties.set( object, map );
 
 			}
@@ -18907,16 +18910,17 @@
 			var currentDepthMask = null;
 			var currentDepthFunc = null;
 			var currentDepthClear = null;
+			var currentDepthTest  = null
 
 			return {
 
 				setTest: function ( depthTest ) {
 
-					if ( depthTest ) {
+					if ( depthTest  ) {
 
 						enable( gl.DEPTH_TEST );
 
-					} else {
+					} else  {
 
 						disable( gl.DEPTH_TEST );
 
@@ -23065,10 +23069,13 @@
 		
 		this.renderLIGHT = function (scene, camera, mesh, renderTarget, forceClear) { 
 
-			_currentGeometryProgram = '';
-			_currentMaterialId = - 1;
+			
+			// _currentGeometryProgram.geometry = null;
+			// _currentGeometryProgram.program = null;
+			// _currentGeometryProgram.wireframe = false;
+			// _currentMaterialId = - 1;
+			
 			_currentCamera = null;
-
 
 			currentRenderState = renderStates.get( scene, camera );
 			currentRenderState.init();
@@ -23088,8 +23095,8 @@
 				this.clear( this.autoClearColor, this.autoClearDepth, this.autoClearStencil );
 
 			}
-
-			objects.update( mesh );
+			
+			var geometry = objects.update( mesh );
 
 			this.renderBufferDirectLIGHT( camera, null, mesh.geometry, mesh.material, mesh, null );
 			
@@ -23099,8 +23106,181 @@
 
 			currentRenderList = null;
 			currentRenderState = null;
+
 		}
 
+		this.renderBufferDirect = function ( camera, fog, geometry, material, object, group ) {
+
+			var frontFaceCW = ( object.isMesh && object.normalMatrix.determinant() < 0 );
+
+			state.setMaterial( material, frontFaceCW );
+
+			var program = setProgram( camera, fog, material, object );
+
+			var updateBuffers = false;
+
+
+			if ( _currentGeometryProgram.geometry !== geometry.id ||
+				_currentGeometryProgram.program !== program.id ||
+				_currentGeometryProgram.wireframe !== ( material.wireframe === true ) ) {
+
+				_currentGeometryProgram.geometry = geometry.id;
+				_currentGeometryProgram.program = program.id;
+				_currentGeometryProgram.wireframe = material.wireframe === true;
+				updateBuffers = true;
+
+			}
+
+			if ( object.morphTargetInfluences ) {
+
+				morphtargets.update( object, geometry, material, program );
+
+				updateBuffers = true;
+
+			}
+
+
+			var index = geometry.index;
+			var position = geometry.attributes.position;
+			var rangeFactor = 1;
+
+			if ( material.wireframe === true ) {
+
+				index = geometries.getWireframeAttribute( geometry );
+				rangeFactor = 2;
+
+			}
+
+			var attribute;
+			var renderer = bufferRenderer;
+
+
+			if ( index !== null ) {
+
+				attribute = attributes.get( index );
+
+				renderer = indexedBufferRenderer;
+				renderer.setIndex( attribute );
+
+			}
+
+			if ( updateBuffers ) {
+
+				setupVertexAttributes( material, program, geometry );
+
+				if ( index !== null ) {
+
+					_gl.bindBuffer( _gl.ELEMENT_ARRAY_BUFFER, attribute.buffer );
+
+				}
+
+			}
+
+			//
+
+			var dataCount = Infinity;
+
+			if ( index !== null ) {
+
+				dataCount = index.count;
+
+			} else if ( position !== undefined ) {
+
+				dataCount = position.count;
+
+			}
+
+			var rangeStart = geometry.drawRange.start * rangeFactor;
+			var rangeCount = geometry.drawRange.count * rangeFactor;
+
+			var groupStart = group !== null ? group.start * rangeFactor : 0;
+			var groupCount = group !== null ? group.count * rangeFactor : Infinity;
+
+			var drawStart = Math.max( rangeStart, groupStart );
+			var drawEnd = Math.min( dataCount, rangeStart + rangeCount, groupStart + groupCount ) - 1;
+
+			var drawCount = Math.max( 0, drawEnd - drawStart + 1 );
+
+			if ( drawCount === 0 ) return;
+
+			//
+
+			if ( object.isMesh ) {
+
+				if ( material.wireframe === true ) {
+
+					state.setLineWidth( material.wireframeLinewidth * getTargetPixelRatio() );
+					renderer.setMode( _gl.LINES );
+
+				} else {
+
+					switch ( object.drawMode ) {
+
+						case TrianglesDrawMode:
+							renderer.setMode( _gl.TRIANGLES );
+							break;
+
+						case TriangleStripDrawMode:
+							renderer.setMode( _gl.TRIANGLE_STRIP );
+							break;
+
+						case TriangleFanDrawMode:
+							renderer.setMode( _gl.TRIANGLE_FAN );
+							break;
+
+					}
+
+				}
+
+
+			} else if ( object.isLine ) {
+
+				var lineWidth = material.linewidth;
+
+				if ( lineWidth === undefined ) lineWidth = 1; // Not using Line*Material
+
+				state.setLineWidth( lineWidth * getTargetPixelRatio() );
+
+				if ( object.isLineSegments ) {
+
+					renderer.setMode( _gl.LINES );
+
+				} else if ( object.isLineLoop ) {
+
+					renderer.setMode( _gl.LINE_LOOP );
+
+				} else {
+
+					renderer.setMode( _gl.LINE_STRIP );
+
+				}
+
+			} else if ( object.isPoints ) {
+
+				renderer.setMode( _gl.POINTS );
+
+			} else if ( object.isSprite ) {
+
+				renderer.setMode( _gl.TRIANGLES );
+
+			}
+
+			if ( geometry && geometry.isInstancedBufferGeometry ) {
+
+				if ( geometry.maxInstancedCount > 0 ) {
+
+					renderer.renderInstances( geometry, drawStart, drawCount );
+
+				}
+
+			} else {
+
+				renderer.render( drawStart, drawCount );
+
+			}
+
+		};
+		
 		this.renderBufferDirectLIGHT = function ( camera, fog, geometry, material, object, group ) {
 
 			var frontFaceCW = ( object.isMesh && object.matrixWorld.determinant() < 0 );
@@ -23112,13 +23292,17 @@
 
 			var updateBuffers = false;
 
-			if ( geometryProgram !== _currentGeometryProgram ) {
 
-				_currentGeometryProgram = geometryProgram;
+			if ( _currentGeometryProgram.geometry !== geometry.id ||
+				_currentGeometryProgram.program !== program.id ||
+				_currentGeometryProgram.wireframe !== ( material.wireframe === true ) ) {
+
+				_currentGeometryProgram.geometry = geometry.id;
+				_currentGeometryProgram.program = program.id;
+				_currentGeometryProgram.wireframe = material.wireframe === true;
 				updateBuffers = true;
 
 			}
-
 			//
 
 			var index = geometry.index;
